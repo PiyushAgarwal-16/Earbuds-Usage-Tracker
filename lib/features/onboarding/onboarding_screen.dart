@@ -60,6 +60,11 @@ class OnboardingScreen extends StatelessWidget {
                   batteryIgnored ? 'View battery settings' : 'Adjust battery settings',
               onAction: onRequestBatteryOptimization,
             ),
+            const SizedBox(height: 16),
+            Text(
+              'On the next screen, select Earbud Usage Tracker and disable optimizations so tracking stays active.',
+              style: theme.textTheme.bodyMedium,
+            ),
             const Spacer(),
             TextButton(
               onPressed: () async {

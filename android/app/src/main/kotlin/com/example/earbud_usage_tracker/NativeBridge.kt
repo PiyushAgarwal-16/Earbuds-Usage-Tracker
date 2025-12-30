@@ -2,7 +2,6 @@ package com.example.earbud_usage_tracker
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -97,17 +96,21 @@ object NativeBridge : MethodChannel.MethodCallHandler {
     private fun openBatteryOptimizationSettings(context: Context?) {
         context ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val packageUri = Uri.parse("package:${context.packageName}")
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                data = packageUri
+            val optimizationIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-            runCatching { context.startActivity(intent) }.onFailure {
-                val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+            val started = runCatching { context.startActivity(optimizationIntent) }.isSuccess
+            if (!started) {
+                val fallback = Intent(Settings.ACTION_SETTINGS).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
-                context.startActivity(fallback)
+                runCatching { context.startActivity(fallback) }
             }
+        } else {
+            val fallback = Intent(Settings.ACTION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            runCatching { context.startActivity(fallback) }
         }
     }
 }
