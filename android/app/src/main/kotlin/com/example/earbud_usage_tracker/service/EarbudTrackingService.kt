@@ -1,5 +1,6 @@
 package com.example.earbud_usage_tracker.service
 
+import android.util.Log
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -30,6 +31,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.ConcurrentHashMap
@@ -44,6 +46,7 @@ class EarbudTrackingService : Service() {
     private var isPlaybackActive: Boolean = false
     private var currentSession: SessionState? = null
     private var volumeJob: Job? = null
+    private var statePollJob: Job? = null
 
     private val controllerCallbacks = ConcurrentHashMap<MediaController, MediaController.Callback>()
     private val audioDeviceCallback = object : AudioDeviceCallback() {
@@ -71,6 +74,12 @@ class EarbudTrackingService : Service() {
         registerSessionListener()
         updateEarbudConnectionState()
         refreshPlaybackState()
+        statePollJob = serviceScope.launch {
+            while (isActive) {
+                evaluateSessionState()
+                delay(3000) // 3 seconds
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -78,6 +87,9 @@ class EarbudTrackingService : Service() {
     }
 
     override fun onDestroy() {
+        statePollJob?.cancel()
+        statePollJob = null
+
         volumeJob?.cancel()
         controllerCallbacks.forEach { (controller, callback) ->
             controller.unregisterCallback(callback)
@@ -164,41 +176,75 @@ class EarbudTrackingService : Service() {
         evaluateSessionState()
     }
 
-    private fun evaluateSessionState() {
-        val shouldTrack = earbudsConnected && isPlaybackActive
-        if (shouldTrack && currentSession == null) {
-            startSession()
-        } else if (!shouldTrack && currentSession != null) {
-            endSession()
-        }
-        if (shouldTrack) {
-            ensureVolumeSampling()
-        } else {
-            volumeJob?.cancel()
-            volumeJob = null
-        }
+private fun evaluateSessionState() {
+    val currentVolume =
+        audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+    val musicActive = audioManager.isMusicActive
+
+    Log.d(
+        "EarbudDEBUG",
+        "evaluateSessionState() | earbuds=$earbudsConnected volume=$currentVolume playback=$isPlaybackActive musicActive=$musicActive session=${currentSession != null}"
+    )
+
+    val shouldTrack =
+        earbudsConnected && 
+        currentVolume > 0 && 
+        (isPlaybackActive || musicActive)
+
+    if (shouldTrack && currentSession == null) {
+        Log.d("EarbudDEBUG", ">>> START SESSION")
+        startSession()
+    } else if (!shouldTrack && currentSession != null) {
+        Log.d("EarbudDEBUG", ">>> END SESSION")
+        endSession()
     }
 
-    private fun startSession() {
-        val now = System.currentTimeMillis()
-        currentSession = SessionState(startEpochMillis = now)
-        collectVolumeSample()
+    if (shouldTrack) {
+        ensureVolumeSampling()
+    } else {
+        volumeJob?.cancel()
+        volumeJob = null
     }
+}
 
-    private fun endSession() {
-        val state = currentSession ?: return
-        val endMillis = System.currentTimeMillis()
-        val durationSeconds = ((endMillis - state.startEpochMillis) / 1000L).coerceAtLeast(1L)
-        val payload = mapOf(
-            "startTime" to Instant.ofEpochMilli(state.startEpochMillis).atOffset(ZoneOffset.UTC).toString(),
-            "endTime" to Instant.ofEpochMilli(endMillis).atOffset(ZoneOffset.UTC).toString(),
-            "duration" to durationSeconds.toInt(),
-            "avgVolume" to state.averageVolume(),
-            "maxVolume" to state.maxVolume
-        )
+
+private fun startSession() {
+    Log.d("EarbudDEBUG", "startSession() called")
+    val now = System.currentTimeMillis()
+    currentSession = SessionState(startEpochMillis = now)
+    collectVolumeSample()
+}
+
+private fun endSession() {
+    Log.d("EarbudDEBUG", "endSession() called")
+    val state = currentSession ?: return
+
+    val endMillis = System.currentTimeMillis()
+    val durationSeconds =
+        ((endMillis - state.startEpochMillis) / 1000L).coerceAtLeast(1L)
+
+    val payload = mapOf(
+        "startTime" to Instant.ofEpochMilli(state.startEpochMillis)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toOffsetDateTime()
+            .toString(),
+        "endTime" to Instant.ofEpochMilli(endMillis)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toOffsetDateTime()
+            .toString(),
+        "duration" to durationSeconds.toInt(),
+        "avgVolume" to state.averageVolume(),
+        "maxVolume" to state.maxVolume
+    )
+
+    currentSession = null
+    
+    serviceScope.launch(Dispatchers.Main) {
         NativeBridge.sendSessionCompleted(payload)
-        currentSession = null
     }
+}
+
+
 
     private fun ensureVolumeSampling() {
         if (volumeJob?.isActive == true) {

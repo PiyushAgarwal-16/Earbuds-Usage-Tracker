@@ -61,9 +61,11 @@ class NativeTrackingService {
   }
 
   Future<void> _handleMethodCall(MethodCall call) async {
+    print('🔵 Flutter received method call: ${call.method}');
     switch (call.method) {
       case 'sessionCompleted':
         final args = Map<String, dynamic>.from(call.arguments as Map);
+        print('🔵 Session data received: $args');
         final session = AudioSession(
           startTime: DateTime.parse(args['startTime'] as String),
           endTime: DateTime.parse(args['endTime'] as String),
@@ -71,10 +73,14 @@ class NativeTrackingService {
           avgVolume: (args['avgVolume'] as num).toDouble(),
           maxVolume: (args['maxVolume'] as num).toDouble(),
         );
+        print('🔵 Inserting session into database...');
         await _dao.insertSession(session);
+        print('🔵 Session inserted, adding to stream');
         _sessionStreamController.add(session);
+        print('🔵 Session processing complete');
         break;
       default:
+        print('🔴 Unimplemented method: ${call.method}');
         throw PlatformException(
           code: 'UNIMPLEMENTED',
           message: 'Method ${call.method} not implemented on Flutter side',

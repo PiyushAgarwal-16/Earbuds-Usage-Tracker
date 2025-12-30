@@ -53,7 +53,8 @@ class _EarbudUsageTrackerAppState extends State<EarbudUsageTrackerApp>
   Future<void> _initialize() async {
     await _refreshPermissions();
     await _loadTodayData();
-    _sessionSubscription = widget.trackingService.sessions.listen((_) {
+    _sessionSubscription = widget.trackingService.sessions.listen((session) {
+      print('🟢 New session received in main app: ${session.duration}');
       _loadTodayData();
     });
     if (!mounted) {
@@ -82,11 +83,13 @@ class _EarbudUsageTrackerAppState extends State<EarbudUsageTrackerApp>
   }
 
   Future<void> _loadTodayData() async {
+    print('🟡 Loading today\'s data...');
     final stats = await widget.dao.getStatsForDate(DateTime.now());
     final now = DateTime.now();
     final rangeStart = DateTime(now.year, now.month, now.day);
     final rangeEnd = rangeStart.add(const Duration(days: 1));
     final sessions = await widget.dao.getSessionsBetween(rangeStart, rangeEnd);
+    print('🟡 Loaded ${sessions.length} sessions for today');
     if (!mounted) {
       return;
     }

@@ -51,8 +51,8 @@ class AudioSessionDao {
     return db.insert(
       _table,
       {
-        'start_time': session.startTime.toIso8601String(),
-        'end_time': session.endTime.toIso8601String(),
+        'start_time': session.startTime.toUtc().toIso8601String(),
+        'end_time': session.endTime.toUtc().toIso8601String(),
         'duration_seconds': session.duration.inSeconds,
         'avg_volume': session.avgVolume,
         'max_volume': session.maxVolume,
@@ -63,15 +63,17 @@ class AudioSessionDao {
 
   Future<List<AudioSession>> getSessionsBetween(DateTime start, DateTime end) async {
     final db = await _getDb();
+    // Convert local time boundaries to UTC for comparison with stored UTC timestamps
+    final startUtc = start.toUtc().toIso8601String();
+    final endUtc = end.toUtc().toIso8601String();
+    
     final result = await db.query(
       _table,
       where: 'start_time >= ? AND start_time < ?',
-      whereArgs: [
-        start.toIso8601String(),
-        end.toIso8601String(),
-      ],
+      whereArgs: [startUtc, endUtc],
       orderBy: 'start_time ASC',
     );
+    
     return result.map(_mapToSession).toList();
   }
 
@@ -85,8 +87,11 @@ class AudioSessionDao {
   }
 
   Future<DailySessionStats> getStatsForDate(DateTime date) async {
-    final startOfDay = DateTime(date.year, date.month, date.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
+    // Create date boundaries in local time, then convert to UTC for comparison
+    final localStart = DateTime(date.year, date.month, date.day);
+    final localEnd = localStart.add(const Duration(days: 1));
+    final startOfDay = localStart.toUtc();
+    final endOfDay = localEnd.toUtc();
     final db = await _getDb();
     final result = await db.rawQuery(
       '''
@@ -127,8 +132,8 @@ class AudioSessionDao {
 
   AudioSession _mapToSession(Map<String, dynamic> map) {
     return AudioSession(
-      startTime: DateTime.parse(map['start_time'] as String),
-      endTime: DateTime.parse(map['end_time'] as String),
+      startTime: DateTime.parse(map['start_time'] as String).toLocal(),
+      endTime: DateTime.parse(map['end_time'] as String).toLocal(),
       duration: Duration(seconds: map['duration_seconds'] as int),
       avgVolume: (map['avg_volume'] as num).toDouble(),
       maxVolume: (map['max_volume'] as num).toDouble(),
