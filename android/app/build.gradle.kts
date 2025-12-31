@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.earbud_usage_tracker"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -19,24 +19,18 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
-defaultConfig {
-    applicationId = "com.example.earbud_usage_tracker"
+    defaultConfig {
+        applicationId = "com.example.earbud_usage_tracker"
 
-    // REQUIRED for background services & MediaSession
-    minSdk = 26
+        minSdk = 26
+        targetSdk = 36
 
-    // Play Store safe + Android 16 compatible
-    targetSdk = 34
-
-    versionCode = flutter.versionCode
-    versionName = flutter.versionName
-}
-
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -49,4 +43,5 @@ flutter {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

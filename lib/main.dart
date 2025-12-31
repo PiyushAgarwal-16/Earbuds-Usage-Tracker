@@ -10,10 +10,14 @@ import 'features/onboarding/onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   final dao = AudioSessionDao();
   await dao.init();
-  final trackingService = NativeTrackingService(dao);
+
+  // Simple platform check without FFI dependencies
+  final trackingService = NativeTrackingService(dao);      
   await trackingService.initialize();
+  
   runApp(EarbudUsageTrackerApp(
     dao: dao,
     trackingService: trackingService,
